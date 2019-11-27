@@ -1,5 +1,5 @@
 from flask import Flask
-from flask import request, jsonify
+from flask import request, jsonify, abort
 from db import ProductCatalogDB
 import json
 
@@ -20,6 +20,10 @@ def products_handler():
     if (request.method == 'POST'):
         # create product
         print('creating product...')
+        body = request.get_json()
+        name = body.get('name')
+        #desc = 
+        create = redis_db.create_category(name)
     elif (request.method == 'GET'):
         # get all products
         print('fetching all products...')
@@ -62,7 +66,8 @@ def categories_handler():
         # get all categories
         print('fetching all categories...')
         categories = redis_db.get_all_categories()
-        return json.dumps(categories)
+        #if (categories)
+        return jsonify(categories)
     else: 
         # reject request 
         print('rejecting request')
@@ -78,7 +83,10 @@ def category_handler(category_id):
         # get one category
         print(f'fetching category with id {category_id}...')
         category = redis_db.get_category_by_id(category_id)
-        return category
+        if (category == ''): 
+            abort(404)
+        else:
+            return category
     elif (request.method == 'PUT'):
         # update category
         print(f'updating category with id {category_id} ...')
