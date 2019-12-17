@@ -61,7 +61,11 @@ def categories_handler():
         name = body.get('name')
         create = redis_db.create_category(name)
         print(f'create val: {create}')
-        return create
+        if (create == -1):
+            return 'error creating category', 400
+        else:
+            return str(create)
+        return 
     elif (request.method == 'GET'):
         # get all categories
         print('fetching all categories...')
@@ -87,9 +91,9 @@ def category_handler(category_id):
             abort(404)
         else:
             return category
-    elif (request.method == 'PUT'):
-        # update category
-        print(f'updating category with id {category_id} ...')
+    # elif (request.method == 'PUT'):
+    #     # update category
+    #     print(f'updating category with id {category_id} ...')
     elif (request.method == 'DELETE'): 
         # delete category
         print(f'deleting category with id {category_id}...')

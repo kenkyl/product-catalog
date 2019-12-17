@@ -16,7 +16,7 @@ class ProductCatalogDB():
     def create_category(self, category_name):
         category_id = self.r.incr(category_id_key)
         print(f'new category id = {category_id}, name={category_name}')
-        value = self.r.zadd(categories_key, {category_name: category_id})
+        value = self.r.zadd(categories_key, {category_name: float(category_id)})
         if (value > 0):
             return category_id
         else:
