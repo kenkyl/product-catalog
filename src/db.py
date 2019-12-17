@@ -7,6 +7,8 @@ redis_port = 6379
 # NAMESPACE CONSTANTS
 category_id_key = 'categoryid'
 categories_key = 'categories'
+product_id_key = 'productid'
+products_categories_map_key = 'products'
 
 class ProductCatalogDB():
     r = None
@@ -36,3 +38,44 @@ class ProductCatalogDB():
         print(f'got categories: {category_list}')
         value = category_list[0] if(len(category_list) > 0) else ''
         return value
+
+    def create_product(self, product_json):
+        # 1. check category 
+        category = product_json.get('category')
+        category_id = 0
+        if (category):
+            category_id = category.get('id')
+            if (self.get_category_by_id(category_id) == ''):
+                # return if category does not exist
+                return -1                
+        else:
+            return -1
+        # 2. get id 
+        product_id = self.r.incr(product_id_key)
+        product_id_str = f'products:{product_id}'
+        # 3. add to product sorted set
+        self.r.zadd(products_categories_map_key, {product_id_str: float(category_id)})
+        # 4. add product hash
+        # TODO - decide if and where to split out images
+        value = self.r.hmset(product_id_str, {
+            'id': product_id,
+            'name': product_json.get('name'),
+            'description': product_json.get('description'),
+            'vendor': product_json.get('vendor'),
+            'price': product_json.get('price'),
+            'currency': product_json.get('currency'),
+            'category': str(product_json.get('category')),
+            'images': str(product_json.get('images'))    
+        })
+        if (value > 0):
+            return product_id
+        else:
+            return -1
+
+    def get_product_by_id(self, product_id):
+        product_value = self.r.hgetall(product_id)
+        print(f'got product: {product_value}')
+        if (product_value):
+            product_value = { y.decode('ascii'): product_value.get(y).decode('ascii') for y in product_value.keys() }
+        return product_value
+        

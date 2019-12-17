@@ -21,9 +21,12 @@ def products_handler():
         # create product
         print('creating product...')
         body = request.get_json()
-        name = body.get('name')
-        #desc = 
-        create = redis_db.create_category(name)
+        create = redis_db.create_product(body)
+        print(f'create val: {create}')
+        if (create == -1):
+            return 'error creating category', 400
+        else:
+            return str(create) 
     elif (request.method == 'GET'):
         # get all products
         print('fetching all products...')
@@ -41,6 +44,11 @@ def product_handler(product_id):
     if (request.method == 'GET'):
         # get one product
         print(f'fetching product with id {product_id}...')
+        product = redis_db.get_product_by_id(f'products:{product_id}')
+        if (product):
+            return product
+        else:
+            abort(404)
     elif (request.method == 'PUT'):
         # update product
         print(f'updating product with id {product_id} ...')
@@ -64,8 +72,7 @@ def categories_handler():
         if (create == -1):
             return 'error creating category', 400
         else:
-            return str(create)
-        return 
+            return str(create) 
     elif (request.method == 'GET'):
         # get all categories
         print('fetching all categories...')
@@ -75,6 +82,7 @@ def categories_handler():
     else: 
         # reject request 
         print('rejecting request')
+        abort(404)
     return 'Categories endpoint reached'
 
 # CATEGORY (ID) ENDPOINT
