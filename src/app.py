@@ -30,6 +30,9 @@ def products_handler():
     elif (request.method == 'GET'):
         # get all products
         print('fetching all products...')
+        products = redis_db.get_all_products()
+        print(f'got products: {products}')
+        return json.dumps(products), 200, {'Content-Type':'application/json'}
     else: 
         # reject request 
         print('rejecting request')
@@ -46,7 +49,7 @@ def product_handler(product_id):
         print(f'fetching product with id {product_id}...')
         product = redis_db.get_product_by_id(f'products:{product_id}')
         if (product):
-            return product
+            return product, 200, {'Content-Type':'application/json'}
         else:
             abort(404)
     elif (request.method == 'PUT'):
@@ -59,7 +62,9 @@ def product_handler(product_id):
 
 @app.route('/products/search-by-name/<search_term>', methods=['GET'])
 def product_search_handler(search_term):
-    return 'Search by name endpoint reached'
+    print(f'searching for products with name containing {search_term}')
+    matches = redis_db.search_products_by_name(search_term)
+    return json.dumps(matches), 200, {'Content-Type':'application/json'}
 
 @app.route('/products/search-by-category/<int:category_id>', methods=['GET'])
 def product_search_by_cat_handler(category_id):
@@ -67,7 +72,7 @@ def product_search_by_cat_handler(category_id):
     products = redis_db.search_products_by_category_id(category_id)
     if (not products):
         abort(404)
-    return json.dumps(products)
+    return json.dumps(products), 200, {'Content-Type':'application/json'}
     
 
 # CATEGORIES ENDPOINT
@@ -111,7 +116,7 @@ def category_handler(category_id):
         if (category == ''): 
             abort(404)
         else:
-            return category
+            return category, 200, {'Content-Type':'application/json'}
     # elif (request.method == 'PUT'):
     #     # update category
     #     print(f'updating category with id {category_id} ...')

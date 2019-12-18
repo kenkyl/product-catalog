@@ -16,8 +16,10 @@ class ProductCatalogDB():
         self.r = redis.Redis(host=redis_host, port=redis_port)
     
     def create_category(self, category_name):
+        # REDIS - INCR
         category_id = self.r.incr(category_id_key)
         print(f'new category id = {category_id}, name={category_name}')
+        # REDIS - ZADD
         value = self.r.zadd(categories_key, {category_name: float(category_id)})
         if (value > 0):
             return category_id
@@ -25,6 +27,7 @@ class ProductCatalogDB():
             return -1
 
     def get_all_categories(self):
+        # REDIS - ZRANGEBYSCORE
         category_list = self.r.zrangebyscore(categories_key, '-inf', '+inf', withscores=True)
         print(f'got categories: {category_list}')
         category_dict = dict(category_list)
@@ -34,6 +37,7 @@ class ProductCatalogDB():
         return category_dict
 
     def get_category_by_id(self, category_id):
+        # REDIS - ZRANGEBYSCORE
         category_list = self.r.zrangebyscore(categories_key, category_id, category_id, start=0, num=1)
         print(f'got categories: {category_list}')
         value = category_list[0] if(len(category_list) > 0) else ''
@@ -51,6 +55,7 @@ class ProductCatalogDB():
         else:
             return -1
         # 2. get id 
+        # REDIS - INCR
         product_id = self.r.incr(product_id_key)
         product_id_str = f'products:{product_id}'
         product_value = {
@@ -64,16 +69,35 @@ class ProductCatalogDB():
             'images': str(product_json.get('images'))    
         }
         # 3. add to product sorted set
-        self.r.zadd(products_categories_map_key, {str(product_value): float(category_id)})
+        # REDIS - ZADD
+        self.r.zadd(products_categories_map_key, {product_id_str: float(category_id)})
         # 4. add product hash
         # TODO - decide if and where to split out images
+        # REDIS - HMSET
         value = self.r.hmset(product_id_str, product_value)
         if (value > 0):
             return product_id
         else:
             return -1
 
+    def get_all_products(self):
+        products = []
+        while (True):
+            # REDIS - SCAN
+            products_scan = self.r.scan(0, match="products:*")
+            print(f'products scan got: {products_scan}')
+            if (products_scan[1]):
+                for y in products_scan[1]:
+                    products.append(y.decode('ascii'))
+            if (products_scan[0] == 0):
+                break
+        if (products):
+            # loop through and grab product info for each
+            products = [ self.get_product_by_id(y) for y in products ]
+        return products
+
     def get_product_by_id(self, product_id):
+        # REDIS - HGETALL
         product_value = self.r.hgetall(product_id)
         print(f'got product: {product_value}')
         if (product_value):
@@ -81,12 +105,24 @@ class ProductCatalogDB():
         return product_value
 
     def search_products_by_name(self, search_term):
+        # method 1 - scan 
+        # 1.a. scan keys for all products (SCAN 0 MATCH products:*)
+        products = self.get_all_products()
+        # 1.b. scan all matched products for name field (HSCAN )
+        matches = []
+        for product in products:
+            if search_term in product.get('name'):
+                matches.append(product)
+        return matches
+        # method 2 - redisearch
         return ''
 
     def search_products_by_category_id(self, category_id):
+        # REDIS - ZRANGEBYSCORE
         products = self.r.zrangebyscore(products_categories_map_key, category_id, category_id)
         print(f'got products: {products}')
         if (products):
-            products = [ y.decode('ascii') for y in products ]
+            # loop through and grab product info for each
+            products = [ self.get_product_by_id(y.decode('ascii')) for y in products ]
         return products
 
