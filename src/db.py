@@ -53,11 +53,7 @@ class ProductCatalogDB():
         # 2. get id 
         product_id = self.r.incr(product_id_key)
         product_id_str = f'products:{product_id}'
-        # 3. add to product sorted set
-        self.r.zadd(products_categories_map_key, {product_id_str: float(category_id)})
-        # 4. add product hash
-        # TODO - decide if and where to split out images
-        value = self.r.hmset(product_id_str, {
+        product_value = {
             'id': product_id,
             'name': product_json.get('name'),
             'description': product_json.get('description'),
@@ -66,7 +62,12 @@ class ProductCatalogDB():
             'currency': product_json.get('currency'),
             'category': str(product_json.get('category')),
             'images': str(product_json.get('images'))    
-        })
+        }
+        # 3. add to product sorted set
+        self.r.zadd(products_categories_map_key, {str(product_value): float(category_id)})
+        # 4. add product hash
+        # TODO - decide if and where to split out images
+        value = self.r.hmset(product_id_str, product_value)
         if (value > 0):
             return product_id
         else:
@@ -78,4 +79,14 @@ class ProductCatalogDB():
         if (product_value):
             product_value = { y.decode('ascii'): product_value.get(y).decode('ascii') for y in product_value.keys() }
         return product_value
-        
+
+    def search_products_by_name(self, search_term):
+        return ''
+
+    def search_products_by_category_id(self, category_id):
+        products = self.r.zrangebyscore(products_categories_map_key, category_id, category_id)
+        print(f'got products: {products}')
+        if (products):
+            products = [ y.decode('ascii') for y in products ]
+        return products
+

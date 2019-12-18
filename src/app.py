@@ -57,6 +57,19 @@ def product_handler(product_id):
         print(f'deleting product with id {product_id}...')
     return 'Product endpoint reached'
 
+@app.route('/products/search-by-name/<search_term>', methods=['GET'])
+def product_search_handler(search_term):
+    return 'Search by name endpoint reached'
+
+@app.route('/products/search-by-category/<int:category_id>', methods=['GET'])
+def product_search_by_cat_handler(category_id):
+    print(f'searching for products in category with id {category_id}')
+    products = redis_db.search_products_by_category_id(category_id)
+    if (not products):
+        abort(404)
+    return json.dumps(products)
+    
+
 # CATEGORIES ENDPOINT
 # POST  -> Create a new category 
 # GET   -> Fetch all categories 
