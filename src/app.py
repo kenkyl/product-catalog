@@ -66,6 +66,13 @@ def product_search_handler(search_term):
     matches = redis_db.search_products_by_name(search_term)
     return json.dumps(matches), 200, {'Content-Type':'application/json'}
 
+# redisearch route
+@app.route('/products/rsearch-by-name/<search_term>', methods=['GET'])
+def product_rsearch_handler(search_term):
+    print(f'redisearching for products with name containing {search_term}')
+    matches = redis_db.rsearch_products_by_name(search_term)
+    return json.dumps(matches), 200, {'Content-Type':'application/json'}
+
 @app.route('/products/search-by-category/<int:category_id>', methods=['GET'])
 def product_search_by_cat_handler(category_id):
     print(f'searching for products in category with id {category_id}')

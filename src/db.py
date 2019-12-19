@@ -1,4 +1,5 @@
 import redis
+import redisearch
 import models as Models
 
 # REDIS CONSTANTS
@@ -12,8 +13,25 @@ products_categories_map_key = 'products'
 
 class ProductCatalogDB():
     r = None
+    rs = None
     def __init__(self):
+        # setup redis clients
         self.r = redis.Redis(host=redis_host, port=redis_port)
+        self.rs = redisearch.Client('product_name', host=redis_host, port=redis_port)
+        try:
+            self.rs.create_index((
+                redisearch.NumericField('id'),
+                redisearch.TextField('name'),
+                redisearch.TextField('description'),
+                redisearch.TextField('vendor'),
+                redisearch.NumericField('price'),
+                redisearch.TextField('currency'),
+                redisearch.TextField('category'),
+                redisearch.TextField('images')
+            ))
+        except:
+            print('index already exists')
+        print(f'index info: {self.rs.info()}')
     
     def create_category(self, category_name):
         # REDIS - INCR
@@ -73,6 +91,19 @@ class ProductCatalogDB():
         self.r.zadd(products_categories_map_key, {product_id_str: float(category_id)})
         # 4. add product hash
         # TODO - decide if and where to split out images
+        # REDISEARCH - ADD 
+        index_value = self.rs.add_document(
+            product_id_str,
+            id=product_id,
+            name=product_json.get('name'),
+            description=product_json.get('description'),
+            vendor=product_json.get('vendor'),
+            price=product_json.get('price'),
+            currency=product_json.get('currency'),
+            category=str(product_json.get('category')),
+            images=str(product_json.get('images'))
+        )
+        print(f'index add document result: {index_value}')
         # REDIS - HMSET
         value = self.r.hmset(product_id_str, product_value)
         if (value > 0):
@@ -82,15 +113,17 @@ class ProductCatalogDB():
 
     def get_all_products(self):
         products = []
+        idx = 0
         while (True):
             # REDIS - SCAN
-            products_scan = self.r.scan(0, match="products:*")
+            products_scan = self.r.scan(idx, match="products:*")
             print(f'products scan got: {products_scan}')
             if (products_scan[1]):
                 for y in products_scan[1]:
                     products.append(y.decode('ascii'))
             if (products_scan[0] == 0):
                 break
+            idx = products_scan[0]
         if (products):
             # loop through and grab product info for each
             products = [ self.get_product_by_id(y) for y in products ]
@@ -104,8 +137,8 @@ class ProductCatalogDB():
             product_value = { y.decode('ascii'): product_value.get(y).decode('ascii') for y in product_value.keys() }
         return product_value
 
+    # method 1 - scan 
     def search_products_by_name(self, search_term):
-        # method 1 - scan 
         # 1.a. scan keys for all products (SCAN 0 MATCH products:*)
         products = self.get_all_products()
         # 1.b. scan all matched products for name field (HSCAN )
@@ -114,8 +147,18 @@ class ProductCatalogDB():
             if search_term in product.get('name'):
                 matches.append(product)
         return matches
-        # method 2 - redisearch
-        return ''
+        
+    # method 2 - redisearch
+    def rsearch_products_by_name(self, search_term):
+        # method 1 - scan 
+        # 1.a. scan keys for all products (SCAN 0 MATCH products:*)
+        products_search = self.rs.search(search_term)
+        products = []
+        print(f'Redisearch products total: {products_search.total}')
+        print(f'Redisearch products: {products_search.docs}')
+        for doc in products_search.docs:
+            products.append(doc.__dict__)
+        return products
 
     def search_products_by_category_id(self, category_id):
         # REDIS - ZRANGEBYSCORE
@@ -125,4 +168,3 @@ class ProductCatalogDB():
             # loop through and grab product info for each
             products = [ self.get_product_by_id(y.decode('ascii')) for y in products ]
         return products
-
