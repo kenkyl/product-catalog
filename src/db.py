@@ -10,6 +10,7 @@ category_id_key = 'categoryid'
 categories_key = 'categories'
 product_id_key = 'productid'
 products_categories_map_key = 'products'
+products_hash_key = 'products-hash'
 
 class ProductCatalogDB():
     r = None
@@ -29,8 +30,8 @@ class ProductCatalogDB():
                 redisearch.TextField('category'),
                 redisearch.TextField('images')
             ))
-        except:
-            print('index already exists')
+        except Exception:
+            print(f'error creating index')
         print(f'index info: {self.rs.info()}')
     
     def create_category(self, category_name):
@@ -38,6 +39,7 @@ class ProductCatalogDB():
         category_id = self.r.incr(category_id_key)
         print(f'new category id = {category_id}, name={category_name}')
         # REDIS - ZADD
+        # <categoryname>:<id> -> 0 (all score set to 0)
         value = self.r.zadd(categories_key, {category_name: float(category_id)})
         if (value > 0):
             return category_id
@@ -56,6 +58,7 @@ class ProductCatalogDB():
 
     def get_category_by_id(self, category_id):
         # REDIS - ZRANGEBYSCORE
+        # currently only useful if you know the ID 
         category_list = self.r.zrangebyscore(categories_key, category_id, category_id, start=0, num=1)
         print(f'got categories: {category_list}')
         value = category_list[0] if(len(category_list) > 0) else ''
@@ -88,7 +91,13 @@ class ProductCatalogDB():
         }
         # 3. add to product sorted set
         # REDIS - ZADD
+        # currently would have to know 
         self.r.zadd(products_categories_map_key, {product_id_str: float(category_id)})
+
+        # NEW - add product to hash 
+        product_name_str = str.lower(product_json.get('name')).replace(' ', '')
+        self.r.hset(f'{products_categories_map_key}:lookup', product_name_str, product_id_str)
+
         # 4. add product hash
         # TODO - decide if and where to split out images
         # REDISEARCH - ADD 
@@ -137,16 +146,18 @@ class ProductCatalogDB():
             product_value = { y.decode('ascii'): product_value.get(y).decode('ascii') for y in product_value.keys() }
         return product_value
 
-    # method 1 - scan 
+    # method 1 - hscan 
     def search_products_by_name(self, search_term):
         # 1.a. scan keys for all products (SCAN 0 MATCH products:*)
-        products = self.get_all_products()
-        # 1.b. scan all matched products for name field (HSCAN )
-        matches = []
-        for product in products:
-            if search_term in product.get('name'):
-                matches.append(product)
-        return matches
+        match_string = str.lower(search_term.replace(' ', ''))
+        num, products_matches = self.r.hscan(f'{products_categories_map_key}:lookup', match=match_string)
+        print(products_matches)
+        product = {}
+        if (products_matches):
+            product_id = products_matches.get(next(iter(products_matches))).decode('ascii')
+            product = self.get_product_by_id(product_id)
+            #products_matches = { y.decode('ascii'): products_matches.get(y).decode('ascii') for y in products_matches.keys() }
+        return product
         
     # method 2 - redisearch
     def rsearch_products_by_name(self, search_term):
